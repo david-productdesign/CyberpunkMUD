@@ -1,0 +1,51 @@
+{
+  "protos": [
+    {
+      "id": "ramen",
+      "name": "a carton of cold ramen",
+      "keywords": "ramen carton noodles",
+      "roomDesc": "A carton of cold ramen sits on the counter, abandoned mid-meal.",
+      "description": "Ganzo's, going by the stamp on the lid. The broth has gone to jelly and the chopsticks are still standing upright in it, which someone's grandmother would have opinions about.",
+      "portable": true
+    },
+    {
+      "id": "rebar",
+      "name": "a length of sharpened rebar",
+      "keywords": "rebar bar length steel",
+      "roomDesc": "A length of rebar juts out of the water, one end filed to a point.",
+      "description": "Sixty centimetres of ribbed steel, filed to a point at one end and wrapped in electrical tape at the other. Somebody made this on purpose, and then left it here, which is the more interesting half of the story.",
+      "portable": true
+    },
+    {
+      "id": "optic",
+      "name": "a cracked optic implant",
+      "keywords": "optic implant eye lens",
+      "roomDesc": "A cracked optic implant has been set aside in a tray, still faintly lit.",
+      "description": "A second-hand eye, its lens spidered across with a single long crack. The iris ring still cycles through its calibration colours every few seconds, patiently, waiting for a socket that is never coming.",
+      "portable": true
+    },
+    {
+      "id": "credchip",
+      "name": "a scuffed credchip",
+      "keywords": "credchip chip cred",
+      "roomDesc": "A scuffed credchip lies in the gutter, half under the runoff.",
+      "description": "A thumbnail of scratched plastic with a contact strip down one face. No issuer mark. It could hold a month's rent or nothing at all, and there is exactly one way to find out.",
+      "portable": true
+    },
+    {
+      "id": "tarp",
+      "name": "a sagging plastic tarpaulin",
+      "keywords": "tarp tarpaulin plastic",
+      "roomDesc": "",
+      "description": "Blue plastic gone chalky with age, strung between two lengths of scaffolding and pooling rainwater in the middle. It is holding up the entire market and is not going anywhere with you.",
+      "portable": false
+    }
+  ],
+  "spawns": [
+    { "key": "s7-noodle:ramen", "proto": "ramen", "room": "s7-noodle" },
+    { "key": "s7-sump:rebar", "proto": "rebar", "room": "s7-sump" },
+    { "key": "s7-market:optic", "proto": "optic", "room": "s7-market" },
+    { "key": "s7-alley:credchip", "proto": "credchip", "room": "s7-alley" },
+    { "key": "s7-market:tarp", "proto": "tarp", "room": "s7-market" }
+  ]
+}

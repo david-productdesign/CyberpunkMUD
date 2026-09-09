@@ -1,0 +1,53 @@
+{
+  "area": "sector7",
+  "rooms": [
+    {
+      "id": "s7-alley",
+      "name": "Neon Alley",
+      "description": "Rain never reaches the floor of Sector 7. It catches on the tangle of cable and laundry line strung between the tower's inner walls and comes down as a warm, permanent drizzle, lit pink and green by signage stacked twelve storeys high in three languages. A noodle stall steams to the north. Somebody has spray-bombed CHROME IS A LOAN, NOT A GIFT across a shuttered storefront.",
+      "exits": { "north": "s7-noodle", "east": "s7-market", "west": "s7-stair" }
+    },
+    {
+      "id": "s7-noodle",
+      "name": "Ganzo's Noodle Stall",
+      "description": "Six stools, four of them occupied by people who are not going anywhere. The air is thick enough to chew: pork fat, chili oil, and the sharp tin smell of solder from the repair bench Ganzo keeps behind the counter. He runs both businesses out of the same pot of boiling water and has never once explained why.",
+      "exits": { "south": "s7-alley" }
+    },
+    {
+      "id": "s7-market",
+      "name": "Grey Market Stalls",
+      "description": "Tarpaulins strung on scaffolding, and under them the unlicensed chrome: optics in unmarked trays, dermal plating stacked like dinner plates, a whole shelf of neural shunts nobody will make eye contact about. The vendors watch your hands, not your face. A clinic sign flickers to the north, the only thing here with a permit.",
+      "exits": { "west": "s7-alley", "north": "s7-clinic" }
+    },
+    {
+      "id": "s7-clinic",
+      "name": "Mama Vex's Ripperdoc Clinic",
+      "description": "Clean. Aggressively, suspiciously clean, in a district where nothing else is. A dentist's chair sits under a surgical rig with four arms and too many needles, and the walls are papered with polaroids of satisfied customers, each one grinning, each one holding up the part that got replaced. Mama Vex is not in. The chair is still warm.",
+      "exits": { "south": "s7-market" }
+    },
+    {
+      "id": "s7-stair",
+      "name": "East Stairwell",
+      "description": "The vertical spine of the district: forty flights of poured concrete, every landing colonised by somebody's cousin. Bicycles hang from the underside of the stairs above. The whole shaft groans when the wind changes. Down is the Sump, and everyone here will tell you not to go.",
+      "exits": { "east": "s7-alley", "up": "s7-catwalk", "down": "s7-sump" }
+    },
+    {
+      "id": "s7-catwalk",
+      "name": "Level 12 Catwalk",
+      "description": "A grating walkway bolted to the tower's inner face, open to the shaft. From here the alley is a bright seam twelve floors down and the rain falls past you in both directions at once. The handrail has been replaced with rebar and optimism.",
+      "exits": { "down": "s7-stair", "up": "s7-roof" }
+    },
+    {
+      "id": "s7-roof",
+      "name": "Rooftop, Rain",
+      "description": "The only sky in Sector 7. Real rain, cold and unfiltered, coming down on a field of dead satellite dishes and cooling fins. The city goes on past the edge in every direction, a circuit diagram lit from underneath, and from up here you can see exactly how small your piece of it is.",
+      "exits": { "down": "s7-catwalk" }
+    },
+    {
+      "id": "s7-sump",
+      "name": "The Sump",
+      "description": "Ankle-deep and rising. The flooded sublevel is where the district throws the things it wants to stop thinking about, and the water has a skin on it that holds the shape of your foot after you move. Something large shifts in the dark at the far end and then decides against it.",
+      "exits": { "up": "s7-stair" }
+    }
+  ]
+}

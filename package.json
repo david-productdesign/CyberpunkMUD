@@ -1,0 +1,12 @@
+{
+  "name": "cyberpunkmud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A telnet MUD set in Sector 7, Kowloon Vertical.",
+  "scripts": {
+    "seed": "node seed.js",
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}
