@@ -28,6 +28,7 @@ const HELP = [
   'Movement    north south east west up down  (n s e w u d)',
   'Looking     look [thing]   examine <thing>   (l, x)',
   'Objects     take <thing>   drop <thing>   inventory   (get, i)',
+  'Traps       trip           arm a laser trip in this room',
   "Talking     say <words>    emote <action>   who        ('words, :action)",
   'System      help   quit',
 ];

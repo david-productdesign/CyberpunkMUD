@@ -28,10 +28,14 @@ telnet localhost 4000
 | Movement | `north` `south` `east` `west` `up` `down` (`n` `s` `e` `w` `u` `d`) |
 | Looking  | `look [thing]` · `examine <thing>` (`l`, `x`) |
 | Objects  | `take <thing>` · `drop <thing>` · `inventory` (`get`, `i`) |
+| Traps    | `trip` — arm a laser trip here; the next player to walk in loses 15 HP |
 | Talking  | `say <words>` · `emote <action>` · `who` (`'words`, `:action`) |
 | System   | `help` · `quit` |
 
 Verbs abbreviate: `n`, `exa`, `inv` all work.
+
+Hit 0 HP and you flatline: a death sequence plays, then you wake in Mama Vex's
+clinic at full HP, still carrying everything you had.
 
 ## Security
 

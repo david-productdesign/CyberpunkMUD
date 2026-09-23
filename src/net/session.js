@@ -13,7 +13,7 @@ export function createSession(socket, id) {
     buffer: '', // half a line, waiting for its newline
     queue: [], // lines waiting to be handled
     draining: false,
-    state: 'name', // 'name' | 'confirm-new' | 'new-password' | 'confirm-password' | 'password' | 'playing'
+    state: 'name', // 'name' | 'confirm-new' | 'new-password' | 'confirm-password' | 'password' | 'playing' | 'dead'
     playerId: null,
     name: null,
     roomId: null,

@@ -3,6 +3,7 @@ import { red } from '../net/ansi.js';
 import { savePlayer } from '../db/players.js';
 import { toRoom } from './broadcast.js';
 import { describeRoom } from './room.js';
+import { springTrip } from './trips.js';
 
 const OPPOSITE = {
   north: 'the south',
@@ -28,4 +29,5 @@ export function cmdMove(session, direction, ctx) {
   toRoom(ctx.sessions, destinationId, `${session.name} arrives from ${OPPOSITE[direction]}.`, session);
 
   send(session, describeRoom(ctx, session));
+  springTrip(session, ctx);
 }

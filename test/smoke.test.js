@@ -206,3 +206,112 @@ test('two operatives share Sector 7', async (t) => {
   rev.socket.destroy();
   mox.socket.destroy();
 });
+
+// Move, and return everything up to the prompt that follows the new room, so
+// whatever happened on arrival is included and nothing is left unread.
+async function walk(client, direction, roomPattern) {
+  say(client, direction);
+  return waitFor(client, new RegExp(`${roomPattern.source}[\\s\\S]*?hp\\] > `));
+}
+
+test('laser trips', async (t) => {
+  const kat = connect();
+  let zed = connect();
+  await createCharacter(kat, 'Kat', 'wirecut1');
+  await createCharacter(zed, 'Zed', 'blastme2');
+
+  await t.test('arming a trip is seen by its owner and hinted to the room', async () => {
+    await walk(kat, 'north', /Ganzo's Noodle Stall/);
+    await walk(zed, 'north', /Ganzo's Noodle Stall/);
+    say(kat, 'trip');
+    await waitFor(kat, /You string a laser trip/);
+    await waitFor(zed, /Kat crouches by the entrance/);
+    say(kat, 'look');
+    const view = await waitFor(kat, /Exits:[^\r\n]*/);
+    assert.match(view, /Your laser trip is armed here\./);
+    say(zed, 'look');
+    const zedView = await waitFor(zed, /Exits:[^\r\n]*/);
+    assert.doesNotMatch(zedView, /laser trip/, 'only the owner sees the beam');
+  });
+
+  await t.test('the owner walks through their own trip', async () => {
+    await walk(kat, 'south', /Neon Alley/);
+    const view = await walk(kat, 'north', /Ganzo's Noodle Stall/);
+    assert.doesNotMatch(view, /detonates/);
+    assert.match(view, /\[30\/30hp\]/);
+  });
+
+  await t.test('another player walking in loses 15 HP', async () => {
+    await walk(zed, 'south', /Neon Alley/);
+    const view = await walk(zed, 'north', /Ganzo's Noodle Stall/);
+    assert.match(view, /the trip detonates\. You take 15 damage\./);
+    assert.match(view, /\[15\/30hp\]/);
+    await waitFor(kat, /Zed walks into a laser trip\./);
+  });
+
+  await t.test('a trip only goes off once', async () => {
+    await walk(zed, 'south', /Neon Alley/);
+    const view = await walk(zed, 'north', /Ganzo's Noodle Stall/);
+    assert.doesNotMatch(view, /detonates/);
+    assert.match(view, /\[15\/30hp\]/);
+  });
+
+  await t.test('damage survives a reconnect', async () => {
+    zed.socket.destroy();
+    await waitFor(kat, /Zed unjacks and is gone\./);
+    zed = connect();
+    await waitFor(zed, /Operative handle: /);
+    say(zed, 'Zed');
+    await waitFor(zed, /Passphrase: /);
+    say(zed, 'blastme2');
+    await waitFor(zed, /Ganzo's Noodle Stall/);
+    say(zed, 'look');
+    await waitFor(zed, /\[15\/30hp\] > /);
+  });
+
+  await t.test('arming a new trip powers down the old one', async () => {
+    say(kat, 'trip');
+    await waitFor(kat, /You string a laser trip/);
+    await walk(kat, 'south', /Neon Alley/);
+    say(kat, 'trip');
+    await waitFor(kat, /Your old laser trip in Ganzo's Noodle Stall powers down\./);
+    await walk(kat, 'east', /Grey Market/);
+
+    // The noodle stall is clear now: walking out of it is safe.
+    say(zed, 'look');
+    await waitFor(zed, /Exits:[^\r\n]*/);
+  });
+
+  await t.test('a trip that takes the last HP flatlines the victim', async () => {
+    say(zed, 'south');
+    await waitFor(zed, /You take 15 damage\./);
+    await waitFor(kat, /Your laser trip in Neon Alley goes off\. Zed caught it and flatlined\./);
+
+    // Nothing typed during the sequence reaches the world.
+    say(zed, 'look');
+    await waitFor(zed, /You are flatlined\. Nothing you do reaches the world\./);
+
+    const sequence = await waitFor(zed, /Mama Vex's Ripperdoc Clinic[\s\S]*?hp\] > /, 15000);
+    assert.match(sequence, /BPM 0/);
+    // The client reads latin1, so the banner's UTF-8 arrives as its raw bytes.
+    const banner = Buffer.from('███████╗██╗      █████╗ ████████╗', 'utf8').toString('latin1');
+    assert.ok(sequence.includes(banner), 'the FLATLINE banner is shown');
+    assert.match(sequence, /\[30\/30hp\] > $/, 'back at full HP');
+  });
+
+  await t.test('the revived player is back in the world', async () => {
+    const view = await walk(zed, 'south', /Grey Market/);
+    assert.match(view, /Kat is here\./);
+    await waitFor(kat, /Zed arrives from the north\./);
+  });
+
+  await t.test('a room holds only one trip', async () => {
+    say(zed, 'trip');
+    await waitFor(zed, /You string a laser trip/);
+    say(kat, 'trip');
+    await waitFor(kat, /Someone else already has a beam strung across this room\./);
+  });
+
+  zed.socket.destroy();
+  kat.socket.destroy();
+});

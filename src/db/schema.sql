@@ -45,3 +45,11 @@ CREATE TABLE IF NOT EXISTS items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_items_location ON items(location);
+
+-- Armed laser trips. One per room, and one per owner: arming a new trip
+-- replaces the owner's old one. A trip is deleted when it goes off.
+CREATE TABLE IF NOT EXISTS trips (
+  room_id  TEXT PRIMARY KEY,
+  owner_id INTEGER NOT NULL UNIQUE REFERENCES players(id),
+  set_at   INTEGER NOT NULL
+);

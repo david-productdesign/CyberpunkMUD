@@ -3,6 +3,7 @@ import { red } from '../net/ansi.js';
 import { cmdMove } from './move.js';
 import { cmdLook } from './room.js';
 import { cmdTake, cmdDrop, cmdInventory, cmdExamine } from './items.js';
+import { cmdTrip } from './trips.js';
 import { cmdSay, cmdEmote, cmdWho, cmdHelp, cmdQuit } from './comm.js';
 
 const direction = (name) => ({
@@ -24,6 +25,7 @@ const COMMANDS = [
   { name: 'inventory', aliases: ['i', 'inv'], run: cmdInventory },
   { name: 'take', aliases: ['get'], run: cmdTake },
   { name: 'drop', aliases: [], run: cmdDrop },
+  { name: 'trip', aliases: [], run: cmdTrip },
   { name: 'say', aliases: [], run: cmdSay },
   { name: 'emote', aliases: ['me'], run: cmdEmote },
   { name: 'who', aliases: [], run: cmdWho },

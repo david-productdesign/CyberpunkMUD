@@ -4,7 +4,7 @@ import { greet, handleLoginLine } from '../game/login.js';
 import { dispatch } from '../game/dispatch.js';
 import { savePlayer } from '../db/players.js';
 import { toRoom } from '../game/broadcast.js';
-import { red } from './ansi.js';
+import { dim, red } from './ansi.js';
 
 const IDLE_MS = 30 * 60 * 1000;
 
@@ -51,6 +51,7 @@ async function drain(session, ctx) {
     const line = session.queue.shift();
     try {
       if (session.state === 'playing') dispatch(session, line, ctx);
+      else if (session.state === 'dead') send(session, dim('You are flatlined. Nothing you do reaches the world.'));
       else await handleLoginLine(session, line, ctx);
     } catch (error) {
       console.error('command failed:', error);

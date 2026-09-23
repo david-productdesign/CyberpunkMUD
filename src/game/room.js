@@ -2,6 +2,7 @@ import { send } from '../net/session.js';
 import { brightCyan, dim, magenta, red, yellow } from '../net/ansi.js';
 import { sessionsInRoom } from './broadcast.js';
 import { itemsAt, cmdExamine } from './items.js';
+import { findTrip } from './trips.js';
 
 // The room as this player sees it right now: title, prose, what is lying
 // around, who else is standing here, and the way out.
@@ -13,6 +14,10 @@ export function describeRoom(ctx, session) {
 
   for (const item of itemsAt(ctx, `room:${room.id}`)) {
     if (item.proto.roomDesc) lines.push(yellow(item.proto.roomDesc));
+  }
+  // Only the person who set it knows where the beam is.
+  if (findTrip(ctx.db, room.id)?.owner_id === session.playerId) {
+    lines.push(red('Your laser trip is armed here.'));
   }
   for (const other of sessionsInRoom(ctx.sessions, room.id, session)) {
     lines.push(magenta(`${other.name} is here.`));
