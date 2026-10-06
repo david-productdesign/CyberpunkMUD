@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A telnet MUD set in Sector 7, Kowloon Vertical.",
+  "description": "An SSH MUD set in Sector 7, Kowloon Vertical.",
   "scripts": {
-    "seed": "node seed.js",
-    "start": "node server.js",
-    "test": "node --test"
+    "seed": "bun seed.js",
+    "start": "bun server.js",
+    "test": "bun test --timeout 60000"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
   }
 }

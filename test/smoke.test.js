@@ -1,15 +1,15 @@
-// Drives real telnet clients against a real server on a throwaway database.
+// Drives real SSH clients against a real server on a throwaway database.
 // Everything the milestone promises is asserted here: login, co-presence,
 // movement broadcasts, take/drop visibility, and persistence across a reconnect.
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import net from 'node:net';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ssh2 from 'ssh2';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -17,25 +17,36 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let workDir;
 let server;
 let port;
+let hostFingerprint;
 
 before(async () => {
   workDir = mkdtempSync(join(tmpdir(), 'mud-test-'));
-  const env = { ...process.env, MUD_DB: join(workDir, 'test.db'), MUD_HOST: '127.0.0.1', MUD_PORT: '0' };
+  const env = {
+    ...process.env,
+    MUD_DB: join(workDir, 'test.db'),
+    MUD_HOST: '127.0.0.1',
+    MUD_PORT: '0',
+    MUD_HOST_KEY: join(workDir, 'host_key'),
+  };
 
   execFileSync(process.execPath, [join(root, 'seed.js')], { cwd: root, env });
 
   server = spawn(process.execPath, [join(root, 'server.js')], { cwd: root, env });
   server.stderr.on('data', (chunk) => process.stderr.write(chunk));
-  port = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('server never reported a port')), 10000);
+  const startup = await new Promise((resolve, reject) => {
+    let output = '';
+    const timer = setTimeout(() => reject(new Error(`server never reported its port:\n${output}`)), 10000);
     server.stdout.on('data', (chunk) => {
-      const match = String(chunk).match(/listening on \S+:(\d+)/);
-      if (match) {
+      output += chunk;
+      const listening = output.match(/ssh listening on \S+:(\d+)/);
+      const key = output.match(/ssh host key (SHA256:\S+)/);
+      if (listening && key) {
         clearTimeout(timer);
-        resolve(Number(match[1]));
+        resolve({ port: Number(listening[1]), fingerprint: key[1] });
       }
     });
   });
+  ({ port, fingerprint: hostFingerprint } = startup);
 });
 
 after(() => {
@@ -43,22 +54,61 @@ after(() => {
   rmSync(workDir, { recursive: true, force: true });
 });
 
-// --- a scripted telnet client -------------------------------------------------
+// --- a scripted SSH client ----------------------------------------------------
 
-function connect() {
-  const socket = net.createConnection(port, '127.0.0.1');
-  // latin1 keeps raw telnet bytes visible as characters so we can assert on them.
-  socket.setEncoding('latin1');
-  const client = { socket, text: '', cursor: 0 };
-  socket.on('data', (chunk) => {
-    client.text += chunk;
+// Connects the way `ssh -p <port> anyone@host` would, checking the server's key
+// against the fingerprint it logged. With `pty`, keystrokes go out raw, as a
+// real terminal sends them, and the server does the echoing.
+function connect({ pty = true } = {}) {
+  return new Promise((resolve, reject) => {
+    const conn = new ssh2.Client();
+    conn.on('error', reject);
+    conn.on('ready', () => {
+      conn.shell(pty ? { term: 'xterm-256color', cols: 80, rows: 24 } : false, (error, stream) => {
+        if (error) return reject(error);
+        stream.setEncoding('utf8');
+        const client = { conn, socket: stream, text: '', cursor: 0, closed: false };
+        stream.on('data', (chunk) => {
+          client.text += chunk;
+        });
+        conn.on('close', () => {
+          client.closed = true;
+        });
+        resolve(client);
+      });
+    });
+    conn.connect({
+      host: '127.0.0.1',
+      port,
+      username: 'anyone',
+      hostHash: 'sha256',
+      hostVerifier: (hexDigest) =>
+        `SHA256:${Buffer.from(hexDigest, 'hex').toString('base64').replace(/=+$/, '')}` === hostFingerprint,
+    });
   });
-  socket.on('error', () => {});
-  return client;
 }
 
+// Raw keystrokes, exactly as a terminal would send them.
+function type(client, keys) {
+  client.socket.write(keys);
+}
+
+// A terminal sends Enter as a lone carriage return.
 function say(client, line) {
-  client.socket.write(`${line}\r\n`);
+  type(client, `${line}\r`);
+}
+
+// Pull the plug without saying goodbye, like a dropped network link.
+function drop(client) {
+  client.conn.destroy();
+}
+
+async function waitUntilClosed(client, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!client.closed) {
+    if (Date.now() > deadline) throw new Error('the SSH connection stayed open');
+    await delay(15);
+  }
 }
 
 // Wait for a pattern in output we have not already consumed, and return
@@ -93,13 +143,12 @@ async function createCharacter(client, name, passphrase) {
 // --- the test -----------------------------------------------------------------
 
 test('two operatives share Sector 7', async (t) => {
-  const rev = connect();
-  const mox = connect();
+  const rev = await connect();
+  const mox = await connect();
 
   await t.test('a new character can be created and lands in the start room', async () => {
     await createCharacter(rev, 'Rev', 'hunter22');
-    // The server offers to echo on our behalf, which is what hides the passphrase.
-    assert.match(rev.text, /\xff\xfb\x01/, 'server should send IAC WILL ECHO before a passphrase');
+    assert.doesNotMatch(rev.text, /hunter22/, 'the passphrase is never echoed');
   });
 
   await t.test('players see each other arrive', async () => {
@@ -173,7 +222,7 @@ test('two operatives share Sector 7', async (t) => {
     await waitFor(rev, /Mox unjacks and is gone\./);
   });
 
-  const returning = connect();
+  const returning = await connect();
 
   await t.test('room and inventory survive a reconnect', async () => {
     await waitFor(returning, /Operative handle: /);
@@ -190,21 +239,21 @@ test('two operatives share Sector 7', async (t) => {
     say(returning, 'drop ramen');
     await waitFor(returning, /You drop a carton of cold ramen\./);
     await waitFor(rev, /Mox drops a carton of cold ramen\./);
-    returning.socket.destroy();
+    drop(returning);
   });
 
   await t.test('a bad passphrase is rejected', async () => {
-    const impostor = connect();
+    const impostor = await connect();
     await waitFor(impostor, /Operative handle: /);
     say(impostor, 'Rev');
     await waitFor(impostor, /Passphrase: /);
     say(impostor, 'wrongwrong');
     await waitFor(impostor, /That passphrase is wrong\./);
-    impostor.socket.destroy();
+    drop(impostor);
   });
 
-  rev.socket.destroy();
-  mox.socket.destroy();
+  drop(rev);
+  drop(mox);
 });
 
 // Move, and return everything up to the prompt that follows the new room, so
@@ -215,8 +264,8 @@ async function walk(client, direction, roomPattern) {
 }
 
 test('laser trips', async (t) => {
-  const kat = connect();
-  let zed = connect();
+  const kat = await connect();
+  let zed = await connect();
   await createCharacter(kat, 'Kat', 'wirecut1');
   await createCharacter(zed, 'Zed', 'blastme2');
 
@@ -257,9 +306,9 @@ test('laser trips', async (t) => {
   });
 
   await t.test('damage survives a reconnect', async () => {
-    zed.socket.destroy();
+    drop(zed);
     await waitFor(kat, /Zed unjacks and is gone\./);
-    zed = connect();
+    zed = await connect();
     await waitFor(zed, /Operative handle: /);
     say(zed, 'Zed');
     await waitFor(zed, /Passphrase: /);
@@ -293,9 +342,7 @@ test('laser trips', async (t) => {
 
     const sequence = await waitFor(zed, /Mama Vex's Ripperdoc Clinic[\s\S]*?hp\] > /, 15000);
     assert.match(sequence, /BPM 0/);
-    // The client reads latin1, so the banner's UTF-8 arrives as its raw bytes.
-    const banner = Buffer.from('███████╗██╗      █████╗ ████████╗', 'utf8').toString('latin1');
-    assert.ok(sequence.includes(banner), 'the FLATLINE banner is shown');
+    assert.ok(sequence.includes('███████╗██╗      █████╗ ████████╗'), 'the FLATLINE banner is shown');
     assert.match(sequence, /\[30\/30hp\] > $/, 'back at full HP');
   });
 
@@ -312,6 +359,95 @@ test('laser trips', async (t) => {
     await waitFor(kat, /Someone else already has a beam strung across this room\./);
   });
 
-  zed.socket.destroy();
-  kat.socket.destroy();
+  drop(zed);
+  drop(kat);
+});
+
+test('the terminal', async (t) => {
+  const ash = await connect();
+  const bea = await connect();
+
+  await t.test('the banner says the link is encrypted', async () => {
+    await waitFor(ash, /Operative handle: /);
+    assert.match(ash.text, /This link is encrypted\./);
+  });
+
+  await t.test('a handle is echoed and a passphrase is not', async () => {
+    type(ash, 'Ash\r');
+    const echoed = await waitFor(ash, /Create a new operative\? \(y\/n\) /);
+    assert.match(echoed, /^Ash\r\n/, 'the handle is echoed back as it is typed');
+    type(ash, 'y\r');
+    await waitFor(ash, /Choose a passphrase: /);
+    type(ash, 'neonrain\r');
+    const afterSecret = await waitFor(ash, /Confirm passphrase: /);
+    assert.doesNotMatch(afterSecret, /neonrain/);
+    type(ash, 'neonrain\r');
+    const arrival = await waitFor(ash, /Neon Alley/);
+    assert.doesNotMatch(arrival, /neonrain/);
+  });
+
+  await t.test('a second player arrives', async () => {
+    await createCharacter(bea, 'Bea', 'copper55');
+    await waitFor(ash, /Bea arrives\./);
+  });
+
+  await t.test('backspace edits the line on screen and in the command', async () => {
+    type(ash, 'loox\x7fk\r');
+    const view = await waitFor(ash, /Exits:[^\r\n]*/);
+    assert.match(view, /hp\] > \x1b\[0mloox\x08 \x08k\r\n/);
+    assert.match(view, /Bea is here\./);
+  });
+
+  await t.test('arrow keys are ignored rather than typed', async () => {
+    type(ash, '\x1b[A\x1b[Dlook\r');
+    const view = await waitFor(ash, /Exits:[^\r\n]*/);
+    assert.match(view, /hp\] > \x1b\[0mlook\r\n/);
+  });
+
+  await t.test('a half-typed line is redrawn after an interruption', async () => {
+    await waitFor(ash, /hp\] > /);
+    type(ash, "'hel");
+    await waitFor(ash, /'hel/);
+    say(bea, 'emote waves');
+    const redraw = await waitFor(ash, /Bea waves\r\n[^\r\n]*hp\] > [^']*'hel/);
+    assert.ok(redraw);
+    type(ash, 'lo\r');
+    await waitFor(bea, /Ash says, "hello"/);
+  });
+
+  await t.test('without a pty, whole lines still work and nothing is echoed', async () => {
+    const plain = await connect({ pty: false });
+    await waitFor(plain, /Operative handle: /);
+    type(plain, 'Ash\n');
+    const reply = await waitFor(plain, /Passphrase: /);
+    assert.doesNotMatch(reply, /^Ash/);
+    plain.conn.end();
+  });
+
+  await t.test('a connection gets only one game', async () => {
+    await assert.rejects(
+      new Promise((resolve, reject) => ash.conn.shell((error, stream) => (error ? reject(error) : resolve(stream)))),
+    );
+  });
+
+  await t.test('quitting closes the SSH connection', async () => {
+    type(ash, 'quit\r');
+    await waitFor(ash, /You unjack\./);
+    await waitFor(bea, /Ash unjacks and is gone\./);
+    await waitUntilClosed(ash);
+  });
+
+  await t.test('a dropped SSH connection is announced', async () => {
+    const back = await connect();
+    await waitFor(back, /Operative handle: /);
+    type(back, 'Ash\r');
+    await waitFor(back, /Passphrase: /);
+    type(back, 'neonrain\r');
+    await waitFor(back, /Neon Alley/);
+    await waitFor(bea, /Ash jacks back in\./);
+    back.conn.end();
+    await waitFor(bea, /Ash unjacks and is gone\./);
+  });
+
+  drop(bea);
 });

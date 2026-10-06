@@ -1,0 +1,4 @@
+# Bun ignores .npmrc. ssh2 lists a native add-on (cpu-features) as optional; it
+# only picks a faster cipher order, and skipping it keeps installs pure JS.
+[install]
+optional = false

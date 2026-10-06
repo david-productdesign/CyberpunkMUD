@@ -1,9 +1,9 @@
-// CyberpunkMUD — telnet server entry point.
+// CyberpunkMUD — SSH server entry point.
 //
-//   node seed.js     load the world files into the database
-//   node server.js   open the door
+//   bun seed.js     load the world files into the database
+//   bun server.js   open the doors
 //
-// MUD_DB, MUD_HOST and MUD_PORT override the defaults.
+// MUD_DB, MUD_HOST, MUD_PORT and MUD_HOST_KEY override the defaults.
 
 import { openDatabase } from './src/db/db.js';
 import { loadWorld } from './src/game/world.js';
@@ -15,14 +15,16 @@ const db = openDatabase();
 const world = loadWorld(db);
 
 if (world.rooms.size === 0) {
-  console.error('The world is empty. Run `node seed.js` first.');
+  console.error('The world is empty. Run `bun seed.js` first.');
   process.exit(1);
 }
 
 const ctx = { db, world, sessions: new Map() };
-const host = process.env.MUD_HOST || '127.0.0.1';
-const port = Number(process.env.MUD_PORT ?? 4000);
-const server = startServer(ctx, { host, port });
+const server = startServer(ctx, {
+  host: process.env.MUD_HOST || '127.0.0.1',
+  port: Number(process.env.MUD_PORT ?? 4022),
+  hostKeyPath: process.env.MUD_HOST_KEY || 'ssh_host_ed25519_key',
+});
 
 // Save everyone before the process goes away.
 function shutdown() {

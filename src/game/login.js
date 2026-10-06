@@ -1,4 +1,4 @@
-import { send, write, askSecret, endSecret } from '../net/session.js';
+import { send, write, askSecret, endSecret, hangUp } from '../net/session.js';
 import { brightMagenta, dim, green, red } from '../net/ansi.js';
 import { hashPassword, verifyPassword } from '../db/auth.js';
 import { findPlayerByName, createPlayer, savePlayer } from '../db/players.js';
@@ -16,7 +16,7 @@ const BANNER = [
   brightMagenta('  ║   S E C T O R   7  ·  KOWLOON VERTICAL        ║'),
   brightMagenta('  ╚═══════════════════════════════════════════════╝'),
   dim('  Forty floors of other people\'s weather.'),
-  dim('  This link is not encrypted. Nothing here is.'),
+  dim('  This link is encrypted. Nothing else here is.'),
   '',
 ];
 
@@ -119,7 +119,7 @@ async function handlePassword(session, input, ctx) {
     session.attempts += 1;
     if (session.attempts >= MAX_ATTEMPTS) {
       send(session, red('Too many bad passphrases. The link drops.'));
-      return session.socket.end();
+      return hangUp(session);
     }
     send(session, red('That passphrase is wrong.'));
     return askSecret(session, 'Passphrase: ');
@@ -152,7 +152,7 @@ function disconnectOther(session, player, ctx) {
   for (const other of ctx.sessions.values()) {
     if (other !== session && other.playerId === player.id) {
       send(other, red('Another connection has taken over this body.'));
-      other.socket.end();
+      hangUp(other);
     }
   }
 }

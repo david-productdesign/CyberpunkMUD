@@ -1,0 +1,11 @@
+# Local state must never be baked into an image: the database holds passphrase
+# hashes and the host key is the server's private identity.
+mud.db
+mud.db-*
+ssh_host_*_key
+
+node_modules
+.git
+.DS_Store
+test
+tools

@@ -1,0 +1,16 @@
+# Local testing under Colima/Docker:  docker compose up --build
+# Then:  ssh -p 4022 anyone@localhost
+
+services:
+  mud:
+    build: .
+    image: cyberpunkmud
+    ports:
+      # Loopback only: reachable from this machine, not the rest of the network.
+      - "127.0.0.1:4022:4022"
+    volumes:
+      - mud-data:/data
+    restart: unless-stopped
+
+volumes:
+  mud-data:

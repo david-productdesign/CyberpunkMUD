@@ -1,25 +1,65 @@
 # CyberpunkMUD
 
 A multi-user dungeon set in **Sector 7, Kowloon Vertical** — forty floors of other
-people's weather. Telnet in, walk the district, pick things up, and watch other
+people's weather. SSH in, walk the district, pick things up, and watch other
 people do the same in real time.
 
-Requires Node 26 (uses the built-in `node:sqlite`). **No dependencies, no build step.**
+Runs on [Bun](https://bun.sh) (tested with 1.4.2). No build step. One runtime
+dependency, [`ssh2`](https://github.com/mscdex/ssh2), for the SSH server.
 
 ## Running it
 
 ```sh
-node seed.js     # load world/*.json into mud.db — safe to re-run
-node server.js   # listening on 127.0.0.1:4000
+bun install     # ssh2 only; bunfig.toml skips its optional native add-on
+bun seed.js     # load world/*.json into mud.db — safe to re-run
+bun server.js   # listening on 127.0.0.1:4022
 ```
 
 Then, in another terminal:
 
 ```sh
-telnet localhost 4000
+ssh -p 4022 anyone@localhost   # any username, no SSH password
 ```
 
-`MUD_DB`, `MUD_HOST` and `MUD_PORT` override the defaults.
+SSH accepts any login; the game then asks for your handle and passphrase as
+usual. The first start generates an ed25519 host key at `ssh_host_ed25519_key`
+(git-ignored) and every start logs its fingerprint, so players can check the
+one `ssh` shows them. Keep that file: replacing it makes every client warn that
+the host key changed.
+
+| Variable | Default | |
+|---|---|---|
+| `MUD_DB` | `mud.db` | database file |
+| `MUD_HOST` | `127.0.0.1` | interface to listen on |
+| `MUD_PORT` | `4022` | SSH port |
+| `MUD_HOST_KEY` | `ssh_host_ed25519_key` | SSH host key file |
+
+## Running it in Docker
+
+```sh
+docker compose up --build -d   # build the image and start it
+ssh -p 4022 anyone@localhost
+docker compose logs -f         # seeding, host key fingerprint, errors
+docker compose down            # stop; the data volume is kept
+```
+
+The container seeds the world on every start (it is idempotent) and then runs
+the server as the unprivileged `bun` user. Everything that must survive lives on
+the `mud-data` volume at `/data`: the database and the SSH host key. Back that
+volume up; `docker compose down -v` deletes it, and with it every character and
+the host key.
+
+`compose.yaml` publishes the port on `127.0.0.1` only, for local testing. To run
+the image elsewhere, mount a volume on `/data` and publish port 4022:
+
+```sh
+docker build -t cyberpunkmud .
+docker run -d --name cyberpunkmud -v mud-data:/data -p 4022:4022 cyberpunkmud
+```
+
+Run exactly one container per volume. Live sessions are held in memory and the
+world is one SQLite file, so the game cannot be scaled across containers, and
+SQLite needs the volume on local disk, not a network file system.
 
 ## Playing
 
@@ -39,10 +79,10 @@ clinic at full HP, still carrying everything you had.
 
 ## Security
 
-**Telnet sends passphrases in cleartext.** That is the protocol, not a bug we can
-patch out. Passphrases are stored scrypt-hashed and the server binds to
-`127.0.0.1` by default, but treat this as a local/LAN toy until it grows a TLS or
-SSH front end. Don't bind it to a public interface.
+SSH encrypts the whole session, passphrase included, and passphrases are stored
+scrypt-hashed. SSH itself lets anyone in: identity is the game's handle and
+passphrase, not an SSH key or account. The server binds to `127.0.0.1` by
+default; `MUD_HOST=0.0.0.0 bun server.js` opens it to other machines.
 
 ## Layout
 
@@ -50,10 +90,10 @@ SSH front end. Don't bind it to a public interface.
 server.js            entry point
 seed.js              world/*.json -> database
 world/               hand-authored rooms and objects (edit these)
-src/net/             telnet, sessions, the listener
+src/net/             SSH listener, terminal input, sessions
 src/game/            login, command dispatch, rooms, movement, items, comms
 src/db/              schema, player rows, passphrase hashing
-test/smoke.test.js   drives two scripted telnet clients
+test/smoke.test.js   drives scripted SSH clients
 ```
 
 Static content (rooms, item prototypes) is authored as JSON, seeded into SQLite,
@@ -65,11 +105,16 @@ and a crash can neither duplicate nor lose anything.
 ## Tests
 
 ```sh
-node --test
+bun run test
 ```
 
-Two scripted telnet clients log in, see each other, move, talk, pass an object
-between them, and reconnect to prove persistence.
+That runs `bun test --timeout 60000`. The longer timeout matters: Bun stops a
+test after 5 seconds by default, and the laser-trip test sits through the whole
+flatline sequence.
+
+Scripted SSH clients log in, see each other, move, talk, pass an object between
+them, and reconnect to prove persistence. They also check the host key, echo
+and passphrase hiding, and line editing.
 
 ## Where this is going
 

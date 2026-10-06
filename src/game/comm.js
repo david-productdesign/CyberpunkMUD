@@ -1,4 +1,4 @@
-import { send } from '../net/session.js';
+import { send, hangUp } from '../net/session.js';
 import { dim, green, red } from '../net/ansi.js';
 import { playingSessions, toRoom } from './broadcast.js';
 
@@ -40,5 +40,5 @@ export function cmdHelp(session) {
 
 export function cmdQuit(session, args, ctx) {
   send(session, red('You unjack. Sector 7 carries on without you.'));
-  session.socket.end();
+  hangUp(session);
 }
