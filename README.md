@@ -36,12 +36,77 @@ the host key changed.
 
 ## Running it in Docker
 
+On a Mac, Docker here is only a client: the engine that runs containers lives
+inside [Colima](https://github.com/abiosoft/colima)'s virtual machine. **Colima
+has to be running before any `docker` command will work**, and it does not
+start on its own when you log in or reboot.
+
+### Starting the server
+
+From the project root:
+
+1. **Start Colima** (takes about 15 seconds). `colima status` tells you whether
+   it is already running.
+
+   ```sh
+   colima start
+   ```
+
+2. **Build and start the game.** `--build` rebuilds the image so it picks up any
+   changes to the code or `world/` files; with nothing changed it finishes in
+   moments.
+
+   ```sh
+   docker compose up --build -d
+   ```
+
+3. **Check it is up.** Look for `ssh listening on 0.0.0.0:4022`. That is the
+   port *inside* the container; on your Mac it is published as 4023 (see below).
+   The `ssh host key SHA256:...` line is the fingerprint `ssh` will ask you to
+   trust.
+
+   ```sh
+   docker compose logs
+   ```
+
+4. **Connect.** Open more terminals and run the same command for more players.
+
+   ```sh
+   ssh -p 4023 anyone@localhost
+   ```
+
+The container uses port **4023** on your Mac so that `bun server.js` can keep
+4022: both can run at once, and `ssh` remembers a separate host key for each.
+This matters because Colima gives no error when the port it wants is already
+taken; the container just becomes unreachable.
+
+### Stopping it
+
 ```sh
-docker compose up --build -d   # build the image and start it
-ssh -p 4022 anyone@localhost
-docker compose logs -f         # seeding, host key fingerprint, errors
-docker compose down            # stop; the data volume is kept
+docker compose down   # stop and remove the container; characters and host key are kept
+colima stop           # optional: shut down the VM to free memory
 ```
+
+If you stop Colima (or restart the Mac) without running `docker compose down`
+first, the game comes back by itself the next time Colima starts.
+
+### If something goes wrong
+
+- **`failed to connect to the docker API ... check if ... the daemon is running`**:
+  Colima is not running. Run `colima start`.
+- **`ssh -p 4023` says `Connection refused` while the container is running**: something
+  else took port 4023 before the container started, and Colima silently skipped
+  forwarding it. Free the port (`lsof -i :4023` shows what has it), then
+  recreate the container so Colima forwards it again:
+
+  ```sh
+  docker compose down && docker compose up -d
+  ```
+- **`ssh` warns that the host identification has changed**: the volume was
+  deleted, so a new host key was generated. Run
+  `ssh-keygen -R "[localhost]:4023"` and reconnect.
+
+### What the container does
 
 The container seeds the world on every start (it is idempotent) and then runs
 the server as the unprivileged `bun` user. Everything that must survive lives on

@@ -1,5 +1,5 @@
-# Local testing under Colima/Docker:  docker compose up --build
-# Then:  ssh -p 4022 anyone@localhost
+# Local testing under Colima/Docker:  docker compose up --build -d
+# Then:  ssh -p 4023 anyone@localhost
 
 services:
   mud:
@@ -7,7 +7,10 @@ services:
     image: cyberpunkmud
     ports:
       # Loopback only: reachable from this machine, not the rest of the network.
-      - "127.0.0.1:4022:4022"
+      # Host port 4023, not 4022, so `bun server.js` can keep 4022 and both run
+      # at once. Colima gives no error when the host port is already taken; the
+      # container just becomes unreachable.
+      - "127.0.0.1:4023:4022"
     volumes:
       - mud-data:/data
     restart: unless-stopped
