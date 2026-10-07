@@ -1,18 +1,26 @@
 import { dim } from './ansi.js';
+import { MAX_OUTPUT_BACKLOG } from './limits.js';
 
-export const MAX_LINE = 4096; // a client sending this much without a newline is not typing
+// Longest line a player can type: room for a long `say`, short enough that one
+// line cannot fill everyone else's screen.
+export const MAX_LINE = 512;
 
 // A session is one connection and everything we know about who is on the other
 // end of it. Plain object, mutated in place by the login machine and the commands.
 //
 // `socket` is the SSH channel carrying the bytes, and `input` is the line
 // reader from terminal.js that turns its keystrokes into commands.
-export function createSession(socket, id, { input, end }) {
+export function createSession(socket, id, { ip, input, end, abort, bucket }) {
   return {
     id,
     socket,
+    ip,
     input,
     end, // closes this connection the way its protocol expects
+    abort, // cuts the connection outright, for a client that is not listening
+    bucket, // how many commands they may send right now
+    warnedFlood: false,
+    aborted: false,
     queue: [], // lines waiting to be handled
     draining: false,
     state: 'name', // 'name' | 'confirm-new' | 'new-password' | 'confirm-password' | 'password' | 'playing' | 'dead'
@@ -37,7 +45,14 @@ export function hangUp(session) {
 }
 
 export function write(session, text) {
-  if (!session.socket.destroyed) session.socket.write(text);
+  if (session.socket.destroyed || session.aborted) return;
+  session.socket.write(text);
+  // A client that stops reading leaves everything we send queued in memory.
+  if (session.socket.writableLength > MAX_OUTPUT_BACKLOG) {
+    session.aborted = true;
+    console.log(`dropped: not reading output ip=${session.ip} handle=${session.name ?? '-'}`);
+    session.abort();
+  }
 }
 
 export function send(session, text = '') {

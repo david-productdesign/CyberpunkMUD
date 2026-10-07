@@ -33,7 +33,7 @@ export async function handleLoginLine(session, line, ctx) {
     case 'name':
       return handleName(session, input, ctx);
     case 'confirm-new':
-      return handleConfirmNew(session, input);
+      return handleConfirmNew(session, input, ctx);
     case 'new-password':
       return handleNewPassword(session, input);
     case 'confirm-password':
@@ -55,6 +55,7 @@ function handleName(session, input, ctx) {
   const player = findPlayerByName(ctx.db, name);
 
   if (player) {
+    if (refuseIfLockedOut(session, player.name, ctx)) return undefined;
     session.pending = { player };
     session.state = 'password';
     return askSecret(session, 'Passphrase: ');
@@ -65,8 +66,16 @@ function handleName(session, input, ctx) {
   return write(session, `No record of "${name}" in Sector 7. Create a new operative? (y/n) `);
 }
 
-function handleConfirmNew(session, input) {
+function handleConfirmNew(session, input, ctx) {
   if (/^y(es)?$/i.test(input)) {
+    // Checked before the passphrase is chosen, so a bot cannot make us hash it.
+    if (ctx.throttles.accountsByIp.count(session.ip) >= ctx.limits.accountsPerIp) {
+      console.log(`account creation refused: limit reached ip=${session.ip}`);
+      session.pending = null;
+      session.state = 'name';
+      send(session, red('Too many new operatives from your address lately. Try again later, or log in to one you have.'));
+      return write(session, 'Operative handle: ');
+    }
     session.state = 'new-password';
     return askSecret(session, 'Choose a passphrase: ');
   }
@@ -106,6 +115,8 @@ async function handleConfirmPassword(session, input, ctx) {
   }
 
   const player = createPlayer(ctx.db, { name, hash, salt, roomId: START_ROOM });
+  ctx.throttles.accountsByIp.add(session.ip);
+  console.log(`account created handle=${name} ip=${session.ip}`);
   send(session, green(`Welcome to Sector 7, ${name}. Nobody is coming to help you.`));
   return enterWorld(session, player, ctx, 'arrives');
 }
@@ -113,9 +124,15 @@ async function handleConfirmPassword(session, input, ctx) {
 async function handlePassword(session, input, ctx) {
   endSecret(session);
   const { player } = session.pending;
+  // Again here, not just at the handle: failures from elsewhere can pile up
+  // while this player is typing, and each guess costs a scrypt hash.
+  if (refuseIfLockedOut(session, player.name, ctx)) return undefined;
   const ok = await verifyPassword(input, player.password_hash, player.password_salt);
 
   if (!ok) {
+    ctx.throttles.loginFailuresByIp.add(session.ip);
+    ctx.throttles.loginFailuresByHandle.add(player.name);
+    console.log(`login failed handle=${player.name} ip=${session.ip}`);
     session.attempts += 1;
     if (session.attempts >= MAX_ATTEMPTS) {
       send(session, red('Too many bad passphrases. The link drops.'));
@@ -125,7 +142,22 @@ async function handlePassword(session, input, ctx) {
     return askSecret(session, 'Passphrase: ');
   }
 
+  console.log(`login handle=${player.name} ip=${session.ip}`);
   return enterWorld(session, player, ctx, 'jacks back in');
+}
+
+// Too many wrong passphrases lately, from this address or for this handle.
+// Returns true when the player has been turned away.
+function refuseIfLockedOut(session, handle, ctx) {
+  const { throttles, limits } = ctx;
+  const byIp = throttles.loginFailuresByIp.count(session.ip) >= limits.loginFailuresPerIp;
+  const byHandle = throttles.loginFailuresByHandle.count(handle) >= limits.loginFailuresPerHandle;
+  if (!byIp && !byHandle) return false;
+
+  console.log(`login refused: ${byIp ? 'address' : 'handle'} locked out handle=${handle} ip=${session.ip}`);
+  send(session, red('Too many wrong passphrases lately. The link drops. Try again in 15 minutes.'));
+  hangUp(session);
+  return true;
 }
 
 // Attach a session to a character and put it in the world.

@@ -27,6 +27,8 @@ before(async () => {
     MUD_HOST: '127.0.0.1',
     MUD_PORT: '0',
     MUD_HOST_KEY: join(workDir, 'host_key'),
+    // Every character here comes from 127.0.0.1. limits.test.js covers the cap.
+    MUD_ACCOUNTS_PER_IP: '50',
   };
 
   execFileSync(process.execPath, [join(root, 'seed.js')], { cwd: root, env });

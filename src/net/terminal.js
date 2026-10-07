@@ -14,6 +14,13 @@ const BACKSPACE = '\x08';
 const DELETE = '\x7f';
 const ERASE_ONE = '\b \b';
 
+// Characters that change how text is displayed rather than adding to it. C1
+// controls (U+0080 to U+009F) work as escape sequences on some terminals, so
+// one player could clear or scramble another's screen. Bidirectional controls
+// reorder what follows them, so a `say` could be made to look like something
+// else entirely. ESC and the C0 controls are handled separately below.
+const DISPLAY_CONTROLS = /[\u0080-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/;
+
 export function createTerminalInput(writeRaw, maxLine, { echo }) {
   const decoder = new StringDecoder('utf8'); // a character can straddle two chunks
   let buffer = ''; // the line being typed
@@ -69,6 +76,7 @@ export function createTerminalInput(writeRaw, maxLine, { echo }) {
       return;
     }
     if (char < ' ') return; // tab and the other control keys mean nothing here
+    if (DISPLAY_CONTROLS.test(char)) return;
     if (buffer.length >= maxLine) return;
     buffer += char;
     echoBack(char);
