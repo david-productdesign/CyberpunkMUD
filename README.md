@@ -186,3 +186,7 @@ and passphrase hiding, and line editing.
 - **M2** — combat: NPCs on a tick loop, `attack`, damage, death and respawn.
 - **M3** — the clinic opens: skills, cyberware slots, credits and vendors.
 - **M4** — more areas, a documented area-file format, admin commands.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
